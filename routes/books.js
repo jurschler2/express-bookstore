@@ -1,5 +1,11 @@
 const express = require("express");
 const Book = require("../models/book");
+const jsonschema = require("jsonschema");
+const bookSchema = require("../schemas/bookSchema.json");
+const bookSchemaISBN = require("../schemas/bookSchemaUpdateISBN.json");
+const bookSchemaBody = require("../schemas/bookSchemaUpdateBody.json");
+
+const ExpressError = require("../expressError")
 
 const router = new express.Router();
 
@@ -30,6 +36,16 @@ router.get("/:id", async function (req, res, next) {
 
 router.post("/", async function (req, res, next) {
   try {
+    const result = jsonschema.validate(req.body, bookSchema);
+
+    if (!result.valid) {
+      // pass validation errors to error handler
+      //  (the "stack" key is generally the most useful)
+      let listOfErrors = result.errors.map(error => error.stack);
+      let error = new ExpressError(listOfErrors, 400);
+      return next(error);
+    }
+
     const book = await Book.create(req.body);
     return res.status(201).json({ book });
   } catch (err) {
@@ -41,6 +57,26 @@ router.post("/", async function (req, res, next) {
 
 router.put("/:isbn", async function (req, res, next) {
   try {
+
+    const resultISBN = jsonschema.validate(req.params.isbn, bookSchemaISBN);
+    const resultBody = jsonschema.validate(req.body, bookSchemaBody);
+
+    if (!resultISBN.valid || !resultBody.valid) {
+      // pass validation errors to error handler
+      //  (the "stack" key is generally the most useful)
+
+      let errorsISBN = resultISBN.errors || [];
+      let errorsBody = resultBody.errors || [];
+
+      let listOfErrorsBody = errorsBody.map(error => error.stack);
+      let listOfErrorsISBN = errorsISBN.map(error => error.stack);
+      let listOfErrors = listOfErrorsISBN.concat(listOfErrorsBody)
+      
+      let error = new ExpressError(listOfErrors, 400);
+      return next(error);
+
+    } 
+
     const book = await Book.update(req.params.isbn, req.body);
     return res.json({ book });
   } catch (err) {
